@@ -20,5 +20,6 @@ export default {
         background-image: url('assets/back.gif');
         background-repeat: no-repeat;
         background-size: cover;
+        overflow: hidden;
     }
 </style>

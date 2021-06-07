@@ -43,12 +43,12 @@ export default {
                 currentID       : 0,          // USED FOR THE :key BINDING PROPERTY NEEDED FOR THE v-for DIRECTIVE
                 intervalIDs     : [],         // LIST OF IDs USED BY THE clearInterval() METHOD
                 bRed            : undefined,  // RED BUBBLE
-                growthRate      : 2,          // RED BUBBLE's GROWTH RATE USED EVERYTIME A BLUE ONE IS 
-                shrinkRate      : 0,          // BLUE BUBBLE's SHRINK RATE USED EVERYTIME A BLUE ONE IS 
-                step            : 1,
-                isFirstBubble   : true,
-                maxBlueBubbles  : 5,
-                extraPoints     : 1,
+                growthRate      : 2,          // RED BUBBLE's GROWTH RATE USED EVERYTIME A BLUE ONE IS HIT
+                shrinkRate      : 0,          // BLUE BUBBLE's SHRINK RATE USED EVERYTIME A BLUE ONE IS HIT
+                step            : 1,          // BLUE BUBBLE'S SPEED
+                isFirstBubble   : true,       // FIRST BUBBLE IS ALWAYS THE RED ONE
+                maxBlueBubbles  : 5,          // MAX BUBBLES THAT CAN BE TRIGGERED BY THE PLAYER
+                extraPoints     : 1,          // EVERYTIME THE RED BUBBLE HITS A BLUE ONE, extraPoints ADDS +1
                 audio: {
                     pops: [
                         new Audio(require('../assets/audio/pop1.wav')),
@@ -59,20 +59,23 @@ export default {
                     redBubble: new Audio(require('../assets/audio/redBubble.wav'))
                 },
                 const: {
-                    initialWidth   : 50,
-                    initialHeight  : 50,
-                    margin         : 30
+                    initialWidth   : 50,    // INITIAL VALUE FOR EVERY BUBBLE
+                    initialHeight  : 50,    // INITIAL VALUE FOR EVERY BUBBLE
+                    margin         : 30     // USED TO AVOID THE BUBBLE HIT THE BOUNDARIES OF THE WINDOW
                 }
             }
         }
     },
     created: function() {
         window.onclick = this.createNewBubble
-        setInterval(() => {
-                this.checkCollisions()
-        }, 1)
+        setInterval(() => { this.checkCollisions() }, 1) // GAME MAIN LOOP. EXECUTES EVERY 1 MILLISECOND
     },
     methods: {
+        /*****************************************************************************************************
+         * createNewBubble(mouseEvent): CREATES A NEW BUBBLE WITH COORDS [this.generateInitialCoords(mouseEvent)] 
+         * RANDOM DIRECTION [rightWay, bottomWay], RANDOM SPEED [rightStep, bottomStep]
+         * AND THEN CALLS THE moveBubble(bubble) METHOD
+         *****************************************************************************************************/
         createNewBubble: function(mouseEvent) {
             if(this.bubbles.list.length == this.bubbles.maxBlueBubbles)
                 return
@@ -88,8 +91,8 @@ export default {
                     src        : require('../assets/b_blue.png')
                 },
                 id         : this.bubbles.currentID,
-                rightWay   : this.generateBool(),
-                bottomWay  : this.generateBool(),
+                rightWay   : this.generateRandomDirection(),
+                bottomWay  : this.generateRandomDirection(),
                 rightStep  : Math.floor(Math.random() * this.bubbles.step) + 1,
                 bottomStep : Math.floor(Math.random() * this.bubbles.step) + 1,
                 rotateDeg  : 0
@@ -98,6 +101,10 @@ export default {
             this.bubbles.extraPoints     = 1      // RESET extraPoints EVERYTIME THE PLAYER CLICKS
             this.moveBubble(newBubble)
         },
+        /****************************************************************************************************
+         * generateInitialCoords(mouseEvent): HAS SOME RANDOM FACTOR TO DECIDE THE INITIAL { x, y } 
+         *                                    WICH WILL BE RETURNED
+         ****************************************************************************************************/
         generateInitialCoords: function(mouseEvent) {
             let deltaX = Math.floor(Math.random() * 30) + 100
             let deltaY = Math.floor(Math.random() * 30) + 100
@@ -105,6 +112,15 @@ export default {
             let y      = (mouseEvent.clientY < this.game.windowHeight/2)? (mouseEvent.clientY + deltaY) : (mouseEvent.clientY - deltaY)
             return { x, y }
         },
+        /***********************************************************************************************************
+         * moveBubble(bubble): MOVES THE bubble EVERY 1ms TO THE SAME DIRECTION THAT THE bubble HAS.
+         * ROTATES THE IMAGE USING THE SAME DIRECTION OF THE bubble
+         * CALLS validateCoords(bubble) TO CORRECT THE DIRECTION IF NEEDED
+         * ASSINGS THE redBubble [ONLY THE FIRST TIME THIS MEHOD IS CALLED]
+         * ADDS THE BUBBLES TO THE GLOBAL ARRAY bubbles.list FOR LATER COLLISION VALIDATIONS
+         * ADDS THE setInterval's id OF EVERY BUBBLE TO THE GLOBAL ARRAY bubbles.intervalIDs
+         *      FOR LATER COLLISION VALIDATIONS [WILL BE NEEDED TO CANCEL THE INTERVAL WITH cancelInterval() METHOD]
+         ************************************************************************************************************/
         moveBubble: function(bubble) {
             let id = setInterval( () => {
                 let leftFactor          = (bubble.rightWay )? 1 : -1
@@ -131,6 +147,11 @@ export default {
                 this.bubbles.intervalIDs.push(id)
             }
         },
+        /***********************************************************************************************************
+         * validateCoords(bubble): VALIDATES IF THE BUBBLE EXCEEDS ANY BOUNDARY AND CORRECT THE DIRECTION
+         *      > IF THE x (CSS/left) EXCEEDS THE LEFT OR RIGHT BOUNDATY, WILL CHANGE THE DIRECTION TO THE OPPOSITE
+         *      > IF THE y (CSS/top ) EXCEEDS THE TOP OR BOTTOM BOUNDATY, WILL CHANGE THE DIRECTION TO THE OPPOSITE
+         ***********************************************************************************************************/
         validateCoords: function(bubble) {
             let maxX = (this.game.windowWidth  - (parseInt(bubble.style.width ) + this.bubbles.const.margin))
             let maxY = (this.game.windowHeight - (parseInt(bubble.style.height) + this.bubbles.const.margin))
@@ -143,7 +164,7 @@ export default {
                 x = maxX
                 bubble.rightWay = false
             } else {
-                if(bubble == this.bubbles.bRed && this.generateBoolLowProb()) {
+                if(bubble == this.bubbles.bRed && this.generateDirectionChange()) {
                     bubble.rightWay = !bubble.rightWay
                 }
             }
@@ -154,13 +175,20 @@ export default {
                 y = maxY
                 bubble.bottomWay = false
             } else {
-                if(bubble == this.bubbles.bRed && this.generateBoolLowProb()) {
+                if(bubble == this.bubbles.bRed && this.generateDirectionChange()) {
                     bubble.bottomWay = !bubble.bottomWay
                 }
             }
             bubble.style.left = x + 'px'
             bubble.style.top  = y + 'px'
         },
+        /***************************************************************************************************************
+         * checkCollisions(): VALIDATES IF THE redBubble HITS ANY BLUE BUBBLE IN THE bubbles.list
+         *      FOR THAT, CALLS THE areHitBoxesColliding(bubble) METHOD WICH RETURNS true IF THAT SO
+         *      > ON HIT: GROWS THE redBubble IMAGE, REMOVES THE BLUE BUBBLE FROM THE bubbles.list,
+         *                CLEARS THE INTERVAL THAT KEEPED MOVING THE BUBBLE AND REMOVES ITS ID FROM bubbles.intervalIDs
+         *                UPDATES THE SCORE
+         ***************************************************************************************************************/
         checkCollisions: function() {
             if(this.bubbles.list.length == 0)
                 return
@@ -185,6 +213,17 @@ export default {
                 }
             }
         },
+        /******************************************************************************************************
+         * areHitBoxesColliding(bubble): RETURNS true IF THE bubble's HIT BOX HITS THE bubbles.bRed HIT BOX
+         *      A HIT BOX LOOKS LIKE THIS:
+         *      x1, y1 ------------- x2, y1
+         *        |                     |
+         *        |       BUBBLE        |
+         *        |       IMAGE         |
+         *        |                     |
+         *      x1, y2 ------------- x2, y2
+         * 
+         ******************************************************************************************************/
         areHitBoxesColliding: function(bubble) {
             let redHB  = this.getHitBox(this.bubbles.bRed)
             let blueHB = this.getHitBox(bubble)
@@ -223,6 +262,20 @@ export default {
             }
             return false
         },
+        /***************************************************************************
+         * getHitBox(bubble): CALCULATES AND RETURNS AN OBJECT { x1, x2, y1, y2 } 
+         *      WITH THE COORDS OF THE bubble's HIT BOX 
+         *      BASED ON THE POSITION AND SIZE OF THE bubble
+         *      
+         *      A HIT BOX LOOKS LIKE THIS:
+         *      x1, y1 ------------- x2, y1
+         *        |                     |
+         *        |       BUBBLE        |
+         *        |       IMAGE         |
+         *        |                     |
+         *      x1, y2 ------------- x2, y2
+         * 
+         ****************************************************************************/
         getHitBox(bubble) {
             let x1 = parseInt(bubble.style.left)
             let x2 = x1 + parseInt(bubble.style.width)
@@ -230,10 +283,22 @@ export default {
             let y2 = y1 + parseInt(bubble.style.height)
             return { x1, x2, y1, y2 }
         },
-        generateBool: function() {
+        /***********************************************************************************
+         * generateRandomDirection(): GENERATES A RANDOM boolean DEPENDING ON THE CONDITION
+         *  THIS IS USED ON createNewBubble() METHOD TO SET THE INITIAL DIRECTION
+         *  ON THE newBubble
+         ***********************************************************************************/
+        generateRandomDirection: function() {
             return Math.random() > 0.5
         },
-        generateBoolLowProb: function() {
+        /***********************************************************************************
+         * generateDirectionChange(): GENERATES A RANDOM boolean DEPENDING ON THE CONDITION
+         *      THIS METHOD IS USED ON validateCoords() 
+         *      FOR THE RED BUBBLE'S MOVEMENT ALGORITHM EXCLUSIVELY
+         *      HAS A 0,0007% CHANCE TO RETURN true. IN THIS CASE, THE RED BUBBLE
+         *      WILL CHANGE DIRECTION SUDDENLY
+         ***********************************************************************************/
+        generateDirectionChange: function() {
             return Math.random() > 0.9993
         }
     }
@@ -245,7 +310,6 @@ export default {
 
 *************************************************************************************************************-->
 <style scoped>
-
     .container {
         display: flex;
         justify-content: space-around;
