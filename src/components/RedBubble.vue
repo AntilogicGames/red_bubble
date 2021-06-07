@@ -334,7 +334,7 @@ export default {
         padding: 5px;
     }    
     .availableBubbles {
-        color: green;
+        color: rgb(0,100,0);
         font-size: 20px;
         border-radius: 50px;
         background-color: rgba(0, 255, 100, 0.5);
